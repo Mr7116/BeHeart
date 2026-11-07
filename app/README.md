@@ -46,9 +46,15 @@ Platform-specific files use the `.native.ts(x)` suffix (`bridge.native.ts`, `Bar
 
 ## Layout
 
-- `src/core/` — data model and deterministic formulas (recovery, strain, sleep, VO₂max, volume, fatigue, macros), sample "demo wearable" data, Apple Health `export.xml` parser.
+- `src/core/` — data model and deterministic formulas (recovery, strain, sleep, VO₂max, volume, fatigue, macros), the SQLite storage layer (`database.ts`), Apple Health `export.xml` parser. `sampleData.ts` is only a test fixture.
 - `src/main/` — Electron main process: window, local JSON storage, file import, OpenFoodFacts lookups, `--screenshot`.
 - `src/renderer/` — React Native screens and components.
+
+## Storage
+
+- **iPhone:** SQLite database `beheart.db` (expo-sqlite). Tables: `daily_health`, `workout_sessions`, `routines`, `food_entries`, `custom_foods`, `live_sessions`, plus `meta` for profile/settings; schema versioned with `PRAGMA user_version`. Saves are diffed, so only changed rows are written, in one transaction. Data saved by older versions (AsyncStorage JSON) is moved in on first start.
+- **Desktop:** a JSON file in the app's data folder.
+- The app starts empty: a first-run screen asks for the profile, and data comes from Apple Health, watches, imports or manual entry. Sample/demo data saved by older versions is removed automatically.
 
 ## Formulas
 

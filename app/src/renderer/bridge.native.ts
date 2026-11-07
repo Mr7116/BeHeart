@@ -1,4 +1,4 @@
-// iPhone bridge: data kept on the phone (AsyncStorage), food lookups straight to OpenFoodFacts,
+// iPhone bridge: data kept on the phone in a SQLite database (beheart.db), food lookups straight to OpenFoodFacts,
 // and live Apple Health reads through HealthKit. Metro picks this file over bridge.ts on iOS.
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -15,6 +15,8 @@ import {
 } from '@kingstinct/react-native-healthkit';
 import type { UpdateFrequency } from '@kingstinct/react-native-healthkit';
 import BleManager from 'react-native-ble-manager';
+import * as SQLite from 'expo-sqlite';
+import { HealthDatabase, SqlDriver } from '../core/database';
 import type { AppData } from '../core/types';
 import { AppleHealthAggregator } from '../core/appleHealth';
 import { BATTERY_LEVEL, BATTERY_SERVICE, HR_MEASUREMENT, HR_SERVICE, parseHeartRateMeasurement, sameUuid } from '../core/heartRate';
@@ -22,7 +24,33 @@ import type { BleHeartRateAccess, BleState, Bridge, HealthKitAccess, HealthSourc
 
 export type { Bridge, HealthKitAccess, ImportResult } from './bridgeTypes';
 
-const KEY = 'beheart-data';
+const LEGACY_KEY = 'beheart-data'; // AsyncStorage JSON used before the SQLite database
+const DB_NAME = 'beheart.db';
+
+// ------------------------------------------------------------ SQLite storage
+let dbPromise: Promise<HealthDatabase> | null = null;
+function database(): Promise<HealthDatabase> {
+  if (!dbPromise) {
+    dbPromise = (async () => {
+      const native = await SQLite.openDatabaseAsync(DB_NAME);
+      const driver: SqlDriver = {
+        exec: (sql) => native.execAsync(sql),
+        run: async (sql, params) => {
+          await native.runAsync(sql, params);
+        },
+        all: (sql, params = []) => native.getAllAsync(sql, params),
+        transaction: (fn) => native.withTransactionAsync(fn),
+      };
+      const db = new HealthDatabase(driver);
+      await db.open();
+      return db;
+    })().catch((e) => {
+      dbPromise = null;
+      throw e;
+    });
+  }
+  return dbPromise;
+}
 const UA = { 'User-Agent': 'BeHeart/0.1 (iOS health tracker)', Accept: 'application/json' };
 const FIELDS = 'code,product_name,generic_name,brands,nutriments';
 
@@ -237,15 +265,25 @@ export const bridge: Bridge = {
   healthKit,
   ble,
   async load() {
-    const raw = await AsyncStorage.getItem(KEY);
-    return raw ? (JSON.parse(raw) as AppData) : null;
+    const db = await database();
+    const stored = await db.load();
+    if (stored) return stored;
+    // First start after the update: move the old AsyncStorage JSON into SQLite once.
+    const raw = await AsyncStorage.getItem(LEGACY_KEY);
+    if (!raw) return null;
+    const legacy = JSON.parse(raw) as AppData;
+    await db.save(legacy);
+    await AsyncStorage.removeItem(LEGACY_KEY);
+    return legacy;
   },
   async save(data) {
-    await AsyncStorage.setItem(KEY, JSON.stringify(data));
+    await (await database()).save(data);
     return true;
   },
   async dataLocation() {
-    return 'Stored privately on this iPhone';
+    const c = await (await database()).counts().catch(() => null);
+    if (!c) return 'SQLite database on this iPhone';
+    return `SQLite database on this iPhone (${DB_NAME}) · ${c.daily_health} days · ${c.workout_sessions} workouts · ${c.food_entries} meals logged · ${c.live_sessions} heart-rate recordings`;
   },
   async exportData() {
     return null;

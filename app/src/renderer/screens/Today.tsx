@@ -60,6 +60,15 @@ export function TodayScreen() {
         </Row>
       </Columns>
       {date === today ? <LiveHeart onOpen={() => go('devices')} maxHr={maxHeartRate(data.profile.age)} /> : null}
+      {data.health.length === 0 ? (
+        <Card style={{ marginBottom: 16 }} title="No health data yet">
+          <Body>Recovery, Strain and Sleep scores appear once BeHeart has heart-rate, HRV and sleep data. Connect your Apple Watch or another watch, or enter a day by hand.</Body>
+          <Row gap={10} style={{ marginTop: 12, flexWrap: 'wrap' }}>
+            <Button title="Connect a watch" onPress={() => go('devices')} />
+            <Button title="Enter data by hand" kind="ghost" onPress={() => go('health')} />
+          </Row>
+        </Card>
+      ) : null}
       {!premium && !canGoBack ? (
         <Text style={{ color: C.premium, fontSize: 12, marginTop: -10, marginBottom: 12 }}>Free plan shows the last 7 days. Premium unlocks your full history.</Text>
       ) : null}

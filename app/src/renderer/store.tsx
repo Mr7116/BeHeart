@@ -1,15 +1,16 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { AppState } from 'react-native';
 import { AppData } from '../core/types';
-import { createInitialData } from '../core/defaults';
-import { syncDemoWearable } from '../core/sampleData';
+import { createEmptyData, hasSampleData, purgeSampleData } from '../core/defaults';
 import { mergeHealth } from '../core/appleHealth';
 import { reapplyBluetoothSessions } from '../core/heartRate';
+import { ALL_FEATURES_FREE } from '../core/plan';
 import { bridge } from './bridge';
 
 interface Store {
   data: AppData;
   update: (fn: (d: AppData) => AppData) => void;
-  /** Demo wearable sync, or a live Apple Health read on iPhone when connected. */
+  /** Reads Apple Health now (iPhone, when connected). */
   syncNow: () => Promise<string>;
   resetAll: () => void;
   /** iPhone only: true when this build can read Apple Health. */
@@ -55,12 +56,10 @@ export function StoreProvider({ children, fallback }: { children: React.ReactNod
     let alive = true;
     (async () => {
       let d = await bridge.load().catch(() => null);
-      if (!d || d.version !== 1) d = createInitialData();
-      else if (d.autoSync && !d.healthKitConnected) {
-        // "Background" sync on start-up: bring the demo wearable up to today.
-        const { health } = syncDemoWearable(d.health, d.profile);
-        d = { ...d, health, lastSync: new Date().toISOString() };
-      }
+      if (!d || d.version !== 1) d = createEmptyData();
+      else if (hasSampleData(d)) d = purgeSampleData(d); // data saved by older versions
+      if (d.onboarded === undefined) d = { ...d, onboarded: true };
+      if (ALL_FEATURES_FREE && !d.subscription.premium) d = { ...d, subscription: { premium: true, plan: null, since: d.subscription.since } };
       if (!alive) return;
       setData(d);
       if (d.healthKitConnected && d.autoSync) {
@@ -72,6 +71,17 @@ export function StoreProvider({ children, fallback }: { children: React.ReactNod
       alive = false;
     };
   }, [pullHealthKit]);
+
+  // Write pending changes straight away when the app goes to the background (iOS may close it).
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (st) => {
+      if (st !== 'active' && dataRef.current) {
+        if (saveTimer.current) clearTimeout(saveTimer.current);
+        bridge.save(dataRef.current).catch(() => undefined);
+      }
+    });
+    return () => sub.remove();
+  }, []);
 
   useEffect(() => {
     if (!data) return;
@@ -87,7 +97,6 @@ export function StoreProvider({ children, fallback }: { children: React.ReactNod
       const d = dataRef.current;
       if (!d || !d.autoSync) return;
       if (d.healthKitConnected) pullHealthKit(3).catch(() => undefined);
-      else setData((cur) => (cur ? { ...cur, health: syncDemoWearable(cur.health, cur.profile).health, lastSync: new Date().toISOString() } : cur));
     }, SYNC_EVERY_MS);
     return () => clearInterval(t);
   }, [pullHealthKit]);
@@ -116,30 +125,28 @@ export function StoreProvider({ children, fallback }: { children: React.ReactNod
       const n = await pullHealthKit(30);
       return `Read Apple Health: ${n} days updated.`;
     }
-    setData((cur) => {
-      if (!cur) return cur;
-      const r = syncDemoWearable(cur.health, cur.profile);
-      return { ...cur, health: r.health, lastSync: new Date().toISOString() };
-    });
-    return 'Up to date.';
+    if (bridge.healthKit) return 'Connect Apple Health first (Health Data → Connect Apple Health).';
+    return 'Nothing to sync on this computer — import an Apple Health export or enter days by hand.';
   }, [pullHealthKit]);
 
   const connectHealthKit = useCallback(async () => {
     if (!bridge.healthKit) return 'Apple Health is only available in the iPhone app.';
     const ok = await bridge.healthKit.connect();
     if (!ok) return 'Apple Health is not available in this build. Install the full iPhone build (not Expo Go) to connect it.';
-    // Replace sample days with real ones.
-    setData((cur) => (cur ? { ...cur, healthKitConnected: true, health: cur.health.filter((h) => h.source !== 'demo-wearable') } : cur));
+    setData((cur) => (cur ? { ...cur, healthKitConnected: true } : cur));
     if (dataRef.current) dataRef.current = { ...dataRef.current, healthKitConnected: true };
     const n = await pullHealthKit(120);
     return n ? `Connected. Read ${n} days from Apple Health.` : 'Connected, but Apple Health returned no data yet. Check permissions in the Health app.';
   }, [pullHealthKit]);
 
   const disconnectHealthKit = useCallback(() => {
-    setData((cur) => (cur ? { ...cur, healthKitConnected: false, health: syncDemoWearable(cur.health, cur.profile).health } : cur));
+    setData((cur) => (cur ? { ...cur, healthKitConnected: false } : cur));
   }, []);
 
-  const resetAll = useCallback(() => setData(createInitialData()), []);
+  const resetAll = useCallback(() => {
+    const d = createEmptyData();
+    setData(ALL_FEATURES_FREE ? { ...d, subscription: { premium: true, plan: null, since: null } } : d);
+  }, []);
 
   if (!data) return <>{fallback}</>;
   return (

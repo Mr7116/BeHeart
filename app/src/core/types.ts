@@ -1,5 +1,6 @@
 // Shared data model for the whole app. Everything is stored locally as JSON.
 
+/** 'demo-wearable' only appears in data saved by older versions and is removed on load. */
 export type DataSource = 'demo-wearable' | 'manual' | 'apple-health-import';
 
 export interface SleepNight {
@@ -111,6 +112,8 @@ export interface AppData {
   autoSync: boolean;
   /** iPhone: read data straight from Apple Health instead of the demo wearable. */
   healthKitConnected?: boolean;
+  /** False until the person has filled in their profile on first launch. */
+  onboarded?: boolean;
   /** Smartwatch / chest-strap settings (iPhone). */
   watch?: WatchSettings;
   /** Workouts recorded from live heart rate (Bluetooth sensor or Apple Watch). */

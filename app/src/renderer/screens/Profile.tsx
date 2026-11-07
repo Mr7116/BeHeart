@@ -83,7 +83,7 @@ export function ProfileScreen() {
             </Row>
           </Card>
           <Card title="Your data">
-            <Body>Everything is stored on this device only.</Body>
+            <Body>Everything is stored on this device only — nothing is uploaded.</Body>
             <Text style={{ color: C.faint, fontSize: 12, marginTop: 6 }} selectable>
               {where}
             </Text>
@@ -102,7 +102,7 @@ export function ProfileScreen() {
                   <Button title="Keep my data" kind="ghost" onPress={() => setConfirmReset(false)} />
                 </>
               ) : (
-                <Button title="Reset to sample data" kind="danger" onPress={() => setConfirmReset(true)} />
+                <Button title="Erase all my data" kind="danger" onPress={() => setConfirmReset(true)} />
               )}
             </Row>
           </Card>

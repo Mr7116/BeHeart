@@ -55,17 +55,17 @@ export function HealthDataScreen() {
     <View>
       <H1 sub="Where your heart, sleep and activity numbers come from">Health Data</H1>
       <Columns style={{ alignItems: 'stretch' }}>
-        <Card style={{ flex: 1 }} title={canUseHealthKit ? 'Apple Health' : 'Wearable sync'}>
+        <Card style={{ flex: 1 }} title={canUseHealthKit ? 'Apple Health' : 'Sync'}>
           {canUseHealthKit ? (
             <View>
               <Body>
                 {data.healthKitConnected
                   ? 'Connected. Heart rate, resting heart rate, HRV, respiratory rate, steps, active energy and sleep stages are read from Apple Health whenever the app opens and every 15 minutes while it is open.'
-                  : 'Connect Apple Health to use your real iPhone and Apple Watch data instead of the sample data.'}
+                  : 'Connect Apple Health to bring in your iPhone and Apple Watch data.'}
               </Body>
               <Row style={{ marginTop: 12, alignItems: 'center', flexWrap: 'wrap' }} gap={10}>
                 {data.healthKitConnected ? (
-                  <Button title="Use sample data instead" kind="ghost" small onPress={() => { disconnectHealthKit(); setSyncMsg(null); }} />
+                  <Button title="Stop reading Apple Health" kind="ghost" small onPress={() => { disconnectHealthKit(); setSyncMsg(null); }} />
                 ) : (
                   <Button
                     title={busy ? 'Connecting…' : 'Connect Apple Health'}
@@ -81,8 +81,7 @@ export function HealthDataScreen() {
             </View>
           ) : (
             <Body>
-              Live Apple Health sync works in the iPhone app. On the desktop, a demo wearable fills in realistic sample days so every score works, and it
-              keeps itself up to date while the app is open.
+              Live Apple Health and watch sync work in the iPhone app. On this computer, import an Apple Health export or enter days by hand below.
             </Body>
           )}
           <Row style={{ alignItems: 'center', marginTop: 14, justifyContent: 'space-between' }}>
@@ -103,7 +102,7 @@ export function HealthDataScreen() {
             {syncMsg ? <Text style={{ color: C.accent, fontSize: 13 }}>{syncMsg}</Text> : null}
           </Row>
           <Text style={{ color: C.faint, fontSize: 12, marginTop: 12 }}>
-            {counts['demo-wearable'] ?? 0} demo days · {counts['apple-health-import'] ?? 0} from Apple Health · {counts['manual'] ?? 0} entered by hand
+            {counts['apple-health-import'] ?? 0} days from Apple Health · {counts['manual'] ?? 0} entered by hand
           </Text>
         </Card>
         {canUseHealthKit ? null : (

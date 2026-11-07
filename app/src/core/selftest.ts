@@ -1,10 +1,13 @@
 // Quick self-test of the deterministic formulas and the Apple Health parser (run with `npm test`).
 import { AppleHealthAggregator, mergeHealth } from './appleHealth';
-import { createInitialData } from './defaults';
+import { createEmptyData, hasSampleData, purgeSampleData } from './defaults';
+import { syncDemoWearable } from './sampleData';
+import { sampleRoutines, sampleSessions } from './workouts';
 import { recoveryFor, sleepScoreFor, strainFor, vo2maxEstimate } from './scoring';
 import { macroGoals, isValidBarcode } from './nutrition';
 import { estimated1RM, muscleFatigue, weeklyVolume } from './workouts';
 import { todayISO } from './dates';
+import { HealthDatabase, SqlDriver } from './database';
 import { applySessionToDay, identifyBrand, parseHeartRateMeasurement, SessionRecorder, zoneIndex } from './heartRate';
 
 let failed = 0;
@@ -13,7 +16,10 @@ function check(name: string, ok: boolean, detail = '') {
   if (!ok) failed++;
 }
 
-const data = createInitialData();
+// Test fixture: 120 generated days + sample workouts (the app itself starts empty).
+const empty = createEmptyData();
+const profile = { ...empty.profile, name: 'Test' };
+const data = { ...empty, profile, health: syncDemoWearable([], profile).health, routines: sampleRoutines(), sessions: sampleSessions(todayISO(), profile), onboarded: true };
 const today = todayISO();
 const rec = recoveryFor(data.health, data.profile, today);
 check('recovery is 1..99', !!rec && rec.score >= 1 && rec.score <= 99, String(rec?.score));
@@ -78,8 +84,77 @@ const before = data.health.find((d) => d.date === today)!.zoneMin[1];
 check('session adds to today', withS.find((d) => d.date === today)!.zoneMin[1] === Math.round((before + 5) * 10) / 10);
 check('brand detection', identifyBrand('Forerunner 265', 'com.garmin.connect.mobile') === 'garmin' && identifyBrand('Apple Watch ของ Nat', 'com.apple.health.ABC', 'Watch7,1') === 'apple-watch' && identifyBrand('Polar H10 1234') === 'polar');
 
-if (failed) {
-  console.log(`${failed} check(s) failed`);
-  process.exit(1);
+check('empty data has no samples', !hasSampleData(createEmptyData()) && createEmptyData().health.length === 0);
+const purged = purgeSampleData({ ...data, health: [...data.health, { ...data.health[0], date: '2020-01-01', source: 'manual' }] });
+check('purge removes demo days, keeps manual', purged.health.length === 1 && purged.health[0].source === 'manual' && purged.sessions.length === 0 && purged.routines.length === 0);
+
+
+// SQLite storage (same SQL as expo-sqlite on iPhone), using Node's built-in sqlite when available (Node 22.5+).
+async function databaseChecks() {
+  let sqlite: any;
+  try {
+    sqlite = require('node:sqlite');
+  } catch {
+    console.log('SKIP  SQLite checks — this Node has no built-in sqlite');
+    return;
+  }
+  const raw = new sqlite.DatabaseSync(':memory:');
+  const driver: SqlDriver = {
+    exec: async (sql) => raw.exec(sql),
+    run: async (sql, params) => void raw.prepare(sql).run(...params),
+    all: async (sql, params = []) => raw.prepare(sql).all(...params),
+    transaction: async (fn) => {
+      raw.exec('BEGIN');
+      try {
+        await fn();
+        raw.exec('COMMIT');
+      } catch (e) {
+        raw.exec('ROLLBACK');
+        throw e;
+      }
+    },
+  };
+  const db = new HealthDatabase(driver);
+  await db.open();
+  await db.open(); // migrations are idempotent
+  check('db: empty database loads as null', (await db.load()) === null);
+  const full = { ...data, foods: [{ id: 'f1', date: today, meal: 'lunch' as const, grams: 150, food: { id: 'x', name: 'Rice', kcal: 130, protein: 2.7, carbs: 28, fat: 0.3, source: 'built-in' as const } }], liveSessions: [sess] };
+  const n1 = await db.save(full);
+  const back = await db.load();
+  check('db: round-trips every table', deepSame(back, full), `${n1} writes`);
+  const n2 = await db.save(back!);
+  check('db: unchanged save writes nothing', n2 === 0, String(n2));
+  const day = back!.health[back!.health.length - 1];
+  const edited = { ...back!, health: back!.health.map((h) => (h.date === day.date ? { ...h, steps: h.steps + 1 } : h)), foods: [] };
+  const n3 = await db.save(edited);
+  check('db: one edit + one delete = 2 writes', n3 === 2, String(n3));
+  const again = await new HealthDatabase(driver).load();
+  check('db: edits persisted', again!.health.find((h) => h.date === day.date)!.steps === day.steps + 1 && again!.foods.length === 0);
+  const cf = (id: string) => ({ id, name: id, kcal: 1, protein: 0, carbs: 0, fat: 0, source: 'custom' as const });
+  await db.save({ ...again!, customFoods: [cf('b'), cf('a')], foods: [] });
+  const r1 = await new HealthDatabase(driver).load();
+  await db.save({ ...r1!, customFoods: [cf('c'), ...r1!.customFoods] });
+  const r2 = await new HealthDatabase(driver).load();
+  check('db: list order kept (newest custom food first)', r2!.customFoods.map((f) => f.id).join('') === 'cba', r2!.customFoods.map((f) => f.id).join(''));
+  const purgedDb = purgeSampleData(again!);
+  await db.save(purgedDb);
+  const counts = await db.counts();
+  check('db: sample data purged from tables', counts.daily_health === 0 && counts.workout_sessions === 0 && counts.routines === 0, JSON.stringify(counts));
 }
-console.log('All checks passed');
+
+/** Compares two values ignoring object key order. */
+function deepSame(a: any, b: any): boolean {
+  const canon = (x: any): any => (Array.isArray(x) ? x.map(canon) : x && typeof x === 'object' ? Object.fromEntries(Object.keys(x).sort().map((k) => [k, canon(x[k])])) : x);
+  const { version: _a, ...ra } = a ?? {};
+  const { version: _b, ...rb } = b ?? {};
+  return JSON.stringify(canon(ra)) === JSON.stringify(canon(rb));
+}
+
+databaseChecks().then(() => {
+  if (failed) {
+    console.log(`${failed} check(s) failed`);
+    process.exit(1);
+  }
+  console.log('All checks passed');
+  
+});

@@ -16,6 +16,8 @@ import { HealthDataScreen } from './screens/HealthData';
 import { PremiumScreen } from './screens/Premium';
 import { ProfileScreen } from './screens/Profile';
 import { DevicesScreen } from './screens/Devices';
+import { WelcomeScreen } from './screens/Welcome';
+import { ALL_FEATURES_FREE } from '../core/plan';
 import { DevicesProvider } from './devices';
 
 export type ScreenId = 'today' | 'trends' | 'sleep' | 'cardio' | 'workouts' | 'nutrition' | 'health' | 'premium' | 'profile' | 'devices' | 'more';
@@ -35,7 +37,7 @@ function MoreScreen({ go, premium }: { go: (s: ScreenId) => void; premium: boole
     { id: 'trends', label: 'Trends', icon: '📈', sub: '7, 30 and 90-day charts' },
     { id: 'cardio', label: 'Cardio Fitness', icon: '❤', sub: 'VO₂max, zones and cardio load', pro: true },
     { id: 'health', label: 'Health Data', icon: '⟳', sub: 'Apple Health, sync and manual entry' },
-    { id: 'premium', label: 'Premium', icon: '★', sub: premium ? 'Your subscription' : 'See what Premium unlocks' },
+    ...(ALL_FEATURES_FREE ? [] : [{ id: 'premium' as ScreenId, label: 'Premium', icon: '★', sub: premium ? 'Your subscription' : 'See what Premium unlocks' }]),
     { id: 'profile', label: 'Profile & settings', icon: '👤', sub: 'Body details, goals and data' },
   ];
   return (
@@ -86,6 +88,17 @@ function Shell() {
       .catch(() => undefined);
   }, [update]);
 
+  if (!data.onboarded) {
+    return (
+      <SafeArea style={[st.root, { flexDirection: 'column' }]}>
+        <StatusBar barStyle="light-content" />
+        <ScrollView style={st.main} contentContainerStyle={{ padding: phone ? 16 : 28, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
+          <WelcomeScreen />
+        </ScrollView>
+      </SafeArea>
+    );
+  }
+
   const body = (() => {
     switch (screen) {
       case 'today':
@@ -124,9 +137,11 @@ function Shell() {
               <Text style={{ color: '#06110B', fontWeight: '900', fontSize: 14 }}>♥</Text>
             </View>
             <Text style={[st.brandText, { fontSize: 17, flex: 1 }]}>BeHeart</Text>
-            <Pressable onPress={() => setScreen('premium')}>
-              <Text style={{ color: C.premium, fontWeight: '800', fontSize: 13 }}>{premium ? '★ Premium' : '★ Go Premium'}</Text>
-            </Pressable>
+            {ALL_FEATURES_FREE ? null : (
+              <Pressable onPress={() => setScreen('premium')}>
+                <Text style={{ color: C.premium, fontWeight: '800', fontSize: 13 }}>{premium ? '★ Premium' : '★ Go Premium'}</Text>
+              </Pressable>
+            )}
           </View>
           <ScrollView key={screen} style={st.main} contentContainerStyle={{ padding: 16, paddingBottom: 32 }} keyboardShouldPersistTaps="handled">
             {body}
@@ -168,12 +183,14 @@ function Shell() {
             );
           })}
           <View style={{ flex: 1 }} />
+{ALL_FEATURES_FREE ? null : (
           <Pressable onPress={() => setScreen('premium')} style={[st.premiumBox, screen === 'premium' && { borderColor: C.premium }]}>
             <Text style={{ color: C.premium, fontWeight: '800', fontSize: 13 }}>{premium ? '★ Premium active' : '★ Go Premium'}</Text>
             <Text style={{ color: C.sub, fontSize: 12, marginTop: 4 }}>
               {premium ? `${data.subscription.plan === 'yearly' ? 'Yearly' : 'Monthly'} plan` : 'Long-term trends, sleep & cardio reports'}
             </Text>
           </Pressable>
+          )}
           <Pressable onPress={() => setScreen('profile')} style={({ hovered }: any) => [st.profile, (screen === 'profile' || hovered) && { backgroundColor: C.card }]}>
             <View style={st.avatar}>
               <Text style={{ color: C.text, fontWeight: '700' }}>{data.profile.name.slice(0, 1).toUpperCase()}</Text>
