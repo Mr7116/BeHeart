@@ -1,0 +1,56 @@
+{
+  "expo": {
+    "name": "BeHeart",
+    "slug": "beheart",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0B0F14",
+    "platforms": [
+      "ios"
+    ],
+    "ios": {
+      "bundleIdentifier": "com.beheart.app",
+      "supportsTablet": true,
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "UIBackgroundModes": [
+          "bluetooth-central"
+        ],
+        "NSBluetoothAlwaysUsageDescription": "BeHeart connects to your heart-rate watch or chest strap to show live heart rate and record workouts."
+      },
+      "buildNumber": "1"
+    },
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0B0F14"
+    },
+    "plugins": [
+      "expo-status-bar",
+      [
+        "@kingstinct/react-native-healthkit",
+        {
+          "NSHealthShareUsageDescription": "BeHeart reads your heart rate, resting heart rate, HRV, respiratory rate, steps, active energy and sleep to calculate your Recovery, Strain and Sleep scores.",
+          "NSHealthUpdateUsageDescription": false,
+          "background": true
+        }
+      ],
+      [
+        "react-native-ble-manager",
+        {
+          "bluetoothAlwaysPermission": "BeHeart connects to your heart-rate watch or chest strap to show live heart rate and record workouts."
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "BeHeart uses the camera only to read food barcodes.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
+        }
+      ]
+    ],
+    "icon": "./assets/icon.png"
+  }
+}

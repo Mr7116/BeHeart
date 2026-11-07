@@ -1,0 +1,37 @@
+{
+  "name": "beheart",
+  "productName": "BeHeart",
+  "version": "0.1.0",
+  "description": "Health & fitness analytics desktop app (TypeScript + React Native, rendered with react-native-web in Electron)",
+  "main": "build/main.js",
+  "private": true,
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "bundle": "node scripts/bundle.mjs",
+    "build": "npm run typecheck && npm run bundle",
+    "test": "node scripts/selftest.mjs",
+    "package": "npm run build && node scripts/package.mjs",
+    "screenshot": "electron . --screenshot shots/now.png",
+    "start": "electron ."
+  },
+  "license": "UNLICENSED",
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-native-svg": "^15.8.0",
+    "react-native-web": "^0.19.13"
+  },
+  "devDependencies": {
+    "@electron/packager": "^18.3.6",
+    "@types/node": "^22.9.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@types/react-native": "^0.72.8",
+    "electron": "^33.2.0",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.6.3"
+  },
+  "overrides": {
+    "@types/react": "$@types/react"
+  }
+}

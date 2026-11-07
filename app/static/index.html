@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://world.openfoodfacts.org" />
+    <title>BeHeart</title>
+    <style>
+      html, body, #root { height: 100%; margin: 0; background: #0B0F14; }
+      body { font-family: 'Segoe UI', system-ui, -apple-system, Roboto, sans-serif; overflow: hidden; }
+      #root { display: flex; }
+      input { font-family: inherit; }
+      ::-webkit-scrollbar { width: 10px; height: 10px; }
+      ::-webkit-scrollbar-thumb { background: #232E3B; border-radius: 6px; }
+      ::-webkit-scrollbar-track { background: transparent; }
+      ::-webkit-scrollbar-corner { background: transparent; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script src="renderer.js"></script>
+  </body>
+</html>

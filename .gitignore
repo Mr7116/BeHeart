@@ -1,0 +1,25 @@
+# dependencies & build output
+node_modules/
+app/dist/
+app/build/
+app/mobile/ios/
+app/mobile/android/
+app/mobile/build-ios/
+app/mobile/dist-ios/
+app/mobile/.expo/
+*.ipa
+Payload/
+app/shots_*.txt
+
+# local tool / session files (not part of the app)
+agent-session.jsonl
+build-activity.log
+craft.json
+feed.json
+usage.json
+inbox/
+pinned/
+capture/
+checks/
+investigation.cany/
+reference/
