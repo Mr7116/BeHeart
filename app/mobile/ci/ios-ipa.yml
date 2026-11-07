@@ -46,6 +46,9 @@ jobs:
       - name: Type-check
         run: npx tsc --noEmit -p tsconfig.json
 
+      - name: Bundle JavaScript (same step Xcode runs)
+        run: node scripts/bundle-ios.js
+
       - name: Generate the native iOS project (Expo prebuild + CocoaPods)
         run: npx expo prebuild -p ios --clean
         env:
@@ -53,7 +56,7 @@ jobs:
 
       - name: Build (unsigned, Release, device)
         run: |
-          set -o pipefail
+          set +e
           xcodebuild \
             -workspace ios/BeHeart.xcworkspace \
             -scheme BeHeart \
@@ -62,7 +65,27 @@ jobs:
             -destination 'generic/platform=iOS' \
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
-            build | tail -n 200
+            build > xcodebuild.log 2>&1
+          STATUS=$?
+          if [ $STATUS -ne 0 ]; then
+            echo "---------------- errors ----------------"
+            grep -nE "error:|error [A-Z]|Error:|BUILD FAILED|The following build commands failed|^\s+(CompileSwift|CompileC|PhaseScriptExecution|Ld|SwiftCompile|SwiftEmitModule)" xcodebuild.log | grep -v "^.*note:" | head -60
+            echo "---------------- last 150 lines ----------------"
+            tail -n 150 xcodebuild.log
+            # Put the errors in the run summary (annotations are readable without opening the log).
+            MSG=$( (grep -E "error:|Error:" xcodebuild.log | grep -v "note:" | sort -u | head -25; echo; grep -A12 "The following build commands failed" xcodebuild.log | head -14) | cut -c1-400 | sed ':a;N;$!ba;s/%/%25/g;s/\r/%0D/g;s/\n/%0A/g')
+            echo "::error title=xcodebuild failed::${MSG}"
+            exit $STATUS
+          fi
+          tail -n 20 xcodebuild.log
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcodebuild-log
+          path: app/mobile/xcodebuild.log
+          if-no-files-found: ignore
 
       - name: Package BeHeart-unsigned.ipa
         run: |

@@ -1,30 +1,21 @@
-// Builds the iPhone JavaScript bundle with Metro (same bundler Xcode/EAS use) to prove that
-// every screen and library resolves for iOS. Output: build-ios/main.jsbundle
+// Builds the iPhone JavaScript bundle exactly the way Xcode's "Bundle React Native code and images"
+// phase does (expo export:embed), so bundling problems show up here before a 15-minute cloud build.
+// Output: build-ios/main.jsbundle
 const path = require('path');
 const fs = require('fs');
-const Metro = require('metro');
+const { spawnSync } = require('child_process');
 
-async function main() {
-  const projectRoot = path.resolve(__dirname, '..');
-  process.env.NODE_ENV = 'production';
-  process.env.EXPO_NO_TELEMETRY = '1';
-  const config = await Metro.loadConfig({ cwd: projectRoot, config: path.join(projectRoot, 'metro.config.js') });
-  const outDir = path.join(projectRoot, 'build-ios');
-  fs.mkdirSync(outDir, { recursive: true });
-  const out = path.join(outDir, 'main.jsbundle');
-  const result = await Metro.runBuild(config, {
-    entry: path.join(projectRoot, 'index.ts'),
-    out,
-    platform: 'ios',
-    dev: false,
-    minify: false,
-    sourceMap: false,
-  });
-  if (!fs.existsSync(out) && result && typeof result.code === 'string') fs.writeFileSync(out, result.code);
-  console.log(`iOS bundle written: ${out} (${Math.round(fs.statSync(out).size / 1024)} KB)`);
+const projectRoot = path.resolve(__dirname, '..');
+const outDir = path.join(projectRoot, 'build-ios');
+fs.mkdirSync(outDir, { recursive: true });
+const out = path.join(outDir, 'main.jsbundle');
+const r = spawnSync(
+  process.platform === 'win32' ? 'npx.cmd' : 'npx',
+  ['expo', 'export:embed', '--platform', 'ios', '--dev', 'false', '--entry-file', 'index.ts', '--bundle-output', out, '--assets-dest', outDir, '--reset-cache'],
+  { cwd: projectRoot, stdio: 'inherit', shell: process.platform === 'win32', env: { ...process.env, CI: '1', EXPO_NO_TELEMETRY: '1' } },
+);
+if (r.status !== 0 || !fs.existsSync(out)) {
+  console.error('iOS bundle FAILED');
+  process.exit(r.status || 1);
 }
-
-main().catch((err) => {
-  console.error(err && err.message ? err.message : err);
-  process.exit(1);
-});
+console.log(`iOS bundle written: ${out} (${Math.round(fs.statSync(out).size / 1024)} KB)`);
