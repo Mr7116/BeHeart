@@ -83,15 +83,19 @@ function healthKitUsable(): boolean {
 
 const healthKit: HealthKitAccess = {
   async connect() {
-    if (!healthKitUsable()) return false;
+    if (Platform.OS !== 'ios') return false;
+    let available = false;
     try {
-      await requestAuthorization({
-        toRead: [...QUANTITIES.map(([id]) => id), 'HKCategoryTypeIdentifierSleepAnalysis'],
-      });
-      return true;
-    } catch {
-      return false;
+      available = isHealthDataAvailable();
+    } catch (e: any) {
+      throw new Error(`HealthKit module is missing from this build (${e?.message ?? e}).`);
     }
+    if (!available) throw new Error('This device does not support Apple Health.');
+    // Throws with the real reason, e.g. a missing com.apple.developer.healthkit entitlement after re-signing.
+    await requestAuthorization({
+      toRead: [...QUANTITIES.map(([id]) => id), 'HKCategoryTypeIdentifierSleepAnalysis'],
+    });
+    return true;
   },
   async read(days, age) {
     if (!healthKitUsable()) return [];
@@ -198,15 +202,24 @@ function mapState(s: string): BleState {
   return s === 'on' ? 'on' : s === 'off' || s === 'turning_off' ? 'off' : s === 'unauthorized' ? 'unauthorized' : s === 'unsupported' ? 'unsupported' : 'unknown';
 }
 
+/** CoreBluetooth reports "unknown" for a moment after start-up (and while the permission prompt is open). */
+async function settledState(timeoutMs = 4000): Promise<BleState> {
+  const until = Date.now() + timeoutMs;
+  for (;;) {
+    bleState = mapState(String(await BleManager.checkState()));
+    if (bleState !== 'unknown' || Date.now() > until) return bleState;
+    await new Promise((r) => setTimeout(r, 250));
+  }
+}
+
 const ble: BleHeartRateAccess = {
   async state() {
     try {
       await startBle();
-      bleState = mapState(String(await BleManager.checkState()));
+      return await settledState();
     } catch {
       return 'unsupported';
     }
-    return bleState;
   },
   async scan(onFound, seconds) {
     await startBle();

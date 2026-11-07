@@ -131,8 +131,16 @@ export function StoreProvider({ children, fallback }: { children: React.ReactNod
 
   const connectHealthKit = useCallback(async () => {
     if (!bridge.healthKit) return 'Apple Health is only available in the iPhone app.';
-    const ok = await bridge.healthKit.connect();
-    if (!ok) return 'Apple Health is not available in this build. Install the full iPhone build (not Expo Go) to connect it.';
+    let ok = false;
+    try {
+      ok = await bridge.healthKit.connect();
+    } catch (e: any) {
+      const msg = String(e?.message ?? e);
+      return /entitlement/i.test(msg)
+        ? `Apple Health refused: this install is missing the HealthKit permission (entitlement). Re-install with an Apple ID/team that allows HealthKit. Details: ${msg}`
+        : `Could not connect to Apple Health: ${msg}`;
+    }
+    if (!ok) return 'Apple Health is only available on iPhone.';
     setData((cur) => (cur ? { ...cur, healthKitConnected: true } : cur));
     if (dataRef.current) dataRef.current = { ...dataRef.current, healthKitConnected: true };
     const n = await pullHealthKit(120);

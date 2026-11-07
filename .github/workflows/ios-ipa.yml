@@ -91,6 +91,23 @@ jobs:
         run: |
           rm -rf Payload && mkdir Payload
           cp -R build/Build/Products/Release-iphoneos/BeHeart.app Payload/
+          # An unsigned build carries no entitlements, and sideloading tools copy entitlements from the
+          # app binary — so without this the re-signed app has no HealthKit permission.
+          # Ad-hoc sign with the HealthKit entitlement (background delivery left out: free Apple IDs
+          # can't get it, and asking for it makes their signing fail).
+          cat > sideload.entitlements <<'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>com.apple.developer.healthkit</key><true/>
+            <key>com.apple.developer.healthkit.access</key><array/>
+          </dict></plist>
+          EOF
+          if [ -d Payload/BeHeart.app/Frameworks ]; then
+            find Payload/BeHeart.app/Frameworks -maxdepth 1 \( -name '*.framework' -o -name '*.dylib' \) -exec codesign --force --sign - --timestamp=none {} \;
+          fi
+          codesign --force --sign - --timestamp=none --entitlements sideload.entitlements Payload/BeHeart.app
+          codesign -d --entitlements - Payload/BeHeart.app
           zip -qry BeHeart-unsigned.ipa Payload
           ls -lh BeHeart-unsigned.ipa
 
